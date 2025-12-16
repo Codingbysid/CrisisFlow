@@ -8,6 +8,8 @@ interface Report {
   id: number
   raw_text: string
   location: string | null
+  latitude: number | null
+  longitude: number | null
   hazard_type: string | null
   severity: string | null
   confidence_score: number | null
@@ -19,7 +21,14 @@ export default function Home() {
   const [reports, setReports] = useState<Report[]>([])
 
   useEffect(() => {
-    fetchReports()
+    fetchReports() // Initial fetch
+    
+    // Poll every 5 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchReports()
+    }, 5000)
+    
+    return () => clearInterval(interval) // Cleanup on unmount
   }, [])
 
   const fetchReports = async () => {

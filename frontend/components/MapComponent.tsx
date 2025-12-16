@@ -6,6 +6,8 @@ interface Report {
   id: number
   raw_text: string
   location: string | null
+  latitude: number | null
+  longitude: number | null
   hazard_type: string | null
   severity: string | null
   confidence_score: number | null
@@ -21,17 +23,19 @@ export default function MapComponent({ reports }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markersRef = useRef<any[]>([])
+  const dangerZonesRef = useRef<any[]>([])
 
-  // Mock coordinates generator - assigns random coordinates near San Francisco
-  const getMockCoordinates = (reportId: number) => {
-    // Base coordinates for San Francisco
+  // Get coordinates from report, with fallback to mock if not available
+  const getCoordinates = (report: Report) => {
+    if (report.latitude !== null && report.longitude !== null) {
+      return { lat: report.latitude, lng: report.longitude }
+    }
+    
+    // Fallback: Mock coordinates near San Francisco if geocoding failed
     const baseLat = 37.7749
     const baseLng = -122.4194
-    
-    // Add some random variation
     const lat = baseLat + (Math.random() - 0.5) * 0.1
     const lng = baseLng + (Math.random() - 0.5) * 0.1
-    
     return { lat, lng }
   }
 
@@ -63,9 +67,25 @@ export default function MapComponent({ reports }: MapComponentProps) {
         })
         markersRef.current = []
 
+        // Clear existing danger zones
+        dangerZonesRef.current.forEach((zone) => {
+          map.removeLayer(zone)
+        })
+        dangerZonesRef.current = []
+
+        // Collect valid coordinates for bounds calculation
+        const validCoords: [number, number][] = []
+
         // Add markers for each report
         reports.forEach((report) => {
-          const coords = getMockCoordinates(report.id)
+          const coords = getCoordinates(report)
+          
+          // Skip reports without valid coordinates (unless we have a fallback)
+          if (!coords.lat || !coords.lng) {
+            return
+          }
+          
+          validCoords.push([coords.lat, coords.lng])
           
           // Choose marker color based on severity
           let markerColor = 'blue'
@@ -103,7 +123,41 @@ export default function MapComponent({ reports }: MapComponentProps) {
 
           marker.addTo(map)
           markersRef.current.push(marker)
+          
+          // Add danger zone for high severity reports
+          if (report.severity?.toLowerCase() === 'high' && coords.lat && coords.lng) {
+            // Draw a red circle with 500m radius (approximately 0.0045 degrees at equator)
+            const dangerZone = L.default.circle([coords.lat, coords.lng], {
+              radius: 500, // meters
+              color: '#ff0000',
+              fillColor: '#ff0000',
+              fillOpacity: 0.2,
+              weight: 2,
+              opacity: 0.6
+            })
+            
+            dangerZone.bindPopup(`
+              <div style="color: black;">
+                <strong>⚠️ DANGER ZONE</strong><br/>
+                ${report.hazard_type || 'High Severity Incident'}<br/>
+                <small>Avoid this area</small>
+              </div>
+            `)
+            
+            dangerZone.addTo(map)
+            dangerZonesRef.current.push(dangerZone)
+          }
         })
+
+        // Fit map to show all markers, or center on first marker, or use default
+        if (validCoords.length > 0) {
+          if (validCoords.length === 1) {
+            map.setView(validCoords[0], 15)
+          } else {
+            const bounds = L.default.latLngBounds(validCoords)
+            map.fitBounds(bounds, { padding: [50, 50] })
+          }
+        }
       })
     }
   }, [reports])

@@ -3,6 +3,7 @@ import json
 import os
 from typing import Dict, Optional
 from dotenv import load_dotenv
+from app.services.geocoder import get_coordinates
 
 load_dotenv()
 
@@ -70,12 +71,148 @@ def process_report(text: str) -> Dict[str, any]:
     # Random confidence score between 0.8 and 1.0
     confidence_score = round(random.uniform(0.8, 1.0), 2)
     
+    # Geocode the location
+    latitude, longitude = get_coordinates(location)
+    
     return {
         "location": location,
+        "latitude": latitude,
+        "longitude": longitude,
         "hazard_type": hazard_type,
         "severity": severity,
         "confidence_score": confidence_score
     }
+
+
+async def process_image_with_vision(image_base64: str, text: str = "", provider: str = "openai") -> Dict[str, any]:
+    """
+    Process an image report using vision models (GPT-4o or Gemini Pro Vision).
+    
+    Args:
+        image_base64: Base64 encoded image
+        text: Optional text description
+        provider: LLM provider ("openai" or "gemini")
+        
+    Returns:
+        Dictionary with location, hazard_type, severity, and confidence_score
+    """
+    vision_prompt = """Analyze this image. Does it show a disaster? If yes, what type (Fire, Flood, Earthquake, Storm, Tornado)? 
+Estimate the severity (Low, Medium, High). Extract any visible street signs or landmarks for location.
+Return ONLY valid JSON in this exact format:
+{
+    "location": "extracted location from image or 'Location not specified'",
+    "hazard_type": "Fire, Flood, Earthquake, Storm, Tornado, or Unknown",
+    "severity": "Low, Medium, or High",
+    "confidence_score": 0.0-1.0
+}"""
+    
+    if text:
+        vision_prompt += f"\n\nUser description: {text}"
+    
+    try:
+        if provider.lower() == "openai" and OPENAI_AVAILABLE:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY not found")
+            
+            client = openai.OpenAI(api_key=api_key)
+            
+            # Remove data URL prefix if present
+            image_data = image_base64.split(',')[1] if ',' in image_base64 else image_base64
+            
+            response = client.chat.completions.create(
+                model="gpt-4o",  # Vision model
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=200
+            )
+            
+            content = response.choices[0].message.content.strip()
+            # Clean JSON
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
+            result = json.loads(content)
+            
+            # Geocode location
+            location_str = result.get("location", "Location not specified")
+            latitude, longitude = get_coordinates(location_str)
+            result["latitude"] = latitude
+            result["longitude"] = longitude
+            
+            # Increase confidence for image-based reports
+            if result.get("confidence_score"):
+                result["confidence_score"] = min(1.0, result["confidence_score"] * 1.2)
+            
+            return result
+            
+        elif provider.lower() == "gemini" and GEMINI_AVAILABLE:
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                raise ValueError("GOOGLE_API_KEY not found")
+            
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-pro-vision')
+            
+            # Remove data URL prefix if present
+            image_data = image_base64.split(',')[1] if ',' in image_base64 else image_base64
+            import base64
+            image_bytes = base64.b64decode(image_data)
+            
+            response = model.generate_content([
+                vision_prompt,
+                {"mime_type": "image/jpeg", "data": image_bytes}
+            ])
+            
+            content = response.text.strip()
+            # Clean JSON
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
+            result = json.loads(content)
+            
+            # Geocode location
+            location_str = result.get("location", "Location not specified")
+            latitude, longitude = get_coordinates(location_str)
+            result["latitude"] = latitude
+            result["longitude"] = longitude
+            
+            # Increase confidence for image-based reports
+            if result.get("confidence_score"):
+                result["confidence_score"] = min(1.0, result["confidence_score"] * 1.2)
+            
+            return result
+            
+        else:
+            raise ValueError(f"Provider {provider} not available for vision")
+            
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON from vision model: {e}")
+        return process_report(text if text else "Image report")
+    except Exception as e:
+        print(f"Error calling vision model ({provider}): {e}")
+        return process_report(text if text else "Image report")
 
 
 async def process_report_with_llm(text: str, provider: str = "openai") -> Dict[str, any]:
@@ -127,6 +264,13 @@ Return ONLY valid JSON in this exact format:
             content = content.strip()
             
             result = json.loads(content)
+            
+            # Geocode the extracted location
+            location_str = result.get("location", "Location not specified")
+            latitude, longitude = get_coordinates(location_str)
+            result["latitude"] = latitude
+            result["longitude"] = longitude
+            
             return result
             
         elif provider.lower() == "gemini" and GEMINI_AVAILABLE:
@@ -151,6 +295,13 @@ Return ONLY valid JSON in this exact format:
             content = content.strip()
             
             result = json.loads(content)
+            
+            # Geocode the extracted location
+            location_str = result.get("location", "Location not specified")
+            latitude, longitude = get_coordinates(location_str)
+            result["latitude"] = latitude
+            result["longitude"] = longitude
+            
             return result
             
         else:

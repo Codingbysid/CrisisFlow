@@ -7,6 +7,8 @@ interface Report {
   id: number
   raw_text: string
   location: string | null
+  latitude: number | null
+  longitude: number | null
   hazard_type: string | null
   severity: string | null
   confidence_score: number | null
@@ -21,22 +23,61 @@ interface ReportFeedProps {
 
 export default function ReportFeed({ reports, onRefresh }: ReportFeedProps) {
   const [newReportText, setNewReportText] = useState('')
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+  }
+
+  const convertImageToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = (error) => reject(error)
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newReportText.trim()) return
+    if (!newReportText.trim() && !selectedImage) return
 
     try {
+      let imageBase64 = null
+      if (selectedImage) {
+        imageBase64 = await convertImageToBase64(selectedImage)
+      }
+
       const response = await fetch('http://127.0.0.1:8000/api/v1/reports/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ raw_text: newReportText }),
+        body: JSON.stringify({ 
+          raw_text: newReportText || 'Image report',
+          image_base64: imageBase64
+        }),
       })
 
       if (response.ok) {
         setNewReportText('')
+        setSelectedImage(null)
+        setImagePreview(null)
         onRefresh()
       } else {
         console.error('Failed to create report')
@@ -70,13 +111,45 @@ export default function ReportFeed({ reports, onRefresh }: ReportFeedProps) {
         <textarea
           value={newReportText}
           onChange={(e) => setNewReportText(e.target.value)}
-          placeholder="Report a disaster incident..."
+          placeholder="Report a disaster incident... (or upload an image)"
           className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
           rows={3}
         />
+        
+        {/* Image Upload */}
+        <div className="mt-2">
+          <label className="block">
+            <span className="sr-only">Choose image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+            />
+          </label>
+          
+          {imagePreview && (
+            <div className="mt-2 relative">
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="w-full h-32 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={removeImage}
+                className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </div>
+        
         <button
           type="submit"
-          className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          disabled={!newReportText.trim() && !selectedImage}
+          className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors"
         >
           Submit Report
         </button>

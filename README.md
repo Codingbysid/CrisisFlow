@@ -114,13 +114,41 @@ The frontend will be available at `http://localhost:3000`
 - Leaflet integration
 - Real-time map visualization
 - Markers for each report (color-coded by severity)
-- Mock coordinates for development
+- **Real geocoding** - Uses OpenStreetMap Nominatim to convert addresses to coordinates
 
 ### Phase 7: Real AI Integration ✅
 - OpenAI GPT-3.5-turbo support
 - Google Gemini Pro support
 - Graceful error handling with fallback to dummy logic
 - JSON parsing with error recovery
+
+### Upgrade: Real Map (Geocoding) ✅
+- Automatic geocoding of extracted locations
+- Latitude/longitude stored in database
+- Map centers on reports with valid coordinates
+- Fallback to mock coordinates if geocoding fails
+
+### Upgrade: Incident Clustering ✅
+- Groups similar reports within 500m radius into incidents
+- Increases confidence with multiple witnesses
+- Updates severity based on new reports
+- API endpoints for viewing incidents
+
+### Upgrade: Visual Verification ✅
+- Image upload support in frontend
+- Vision model analysis (GPT-4o / Gemini Pro Vision)
+- Automatic location extraction from images
+- Higher confidence scores for image-based reports
+
+### Upgrade: Real-Time Updates ✅
+- Automatic polling every 5 seconds
+- Live dashboard updates without page refresh
+- Real-time incident tracking
+
+### Upgrade: Safe Routing (Danger Zones) ✅
+- Visual danger zones (red circles) for high-severity incidents
+- 500m radius warning zones on map
+- Helps responders plan safe routes
 
 ## API Usage
 
@@ -157,13 +185,24 @@ Available providers:
 
 - The backend uses SQLite by default (database file: `crisisflow.db`)
 - The frontend includes mock data fallback if the backend isn't running
-- Map coordinates are currently mocked (random coordinates near San Francisco)
+- **Geocoding**: Uses OpenStreetMap Nominatim (free, 1 req/sec limit). See `backend/UPGRADE_NOTES.md` for migration instructions.
+- Map automatically centers on reports with valid coordinates
 - All AI processing gracefully falls back to dummy logic if LLM calls fail
+
+## API Endpoints
+
+### Reports
+- `POST /api/v1/reports/` - Create a report (with optional image)
+- `GET /api/v1/reports/` - Get all reports
+- `GET /api/v1/reports/{id}` - Get specific report
+
+### Incidents (Clustered Reports)
+- `GET /api/v1/incidents/` - Get all active incidents
+- `GET /api/v1/incidents/{id}` - Get specific incident with all reports
 
 ## Next Steps
 
-- Add geocoding service to convert location strings to coordinates
-- Implement real-time updates (WebSockets)
+- Add WebSockets for true real-time updates (instead of polling)
 - Add user authentication
 - Implement report verification workflow
 - Add resource tracking (needed vs. available)
