@@ -21,4 +21,8 @@ class Report(Base):
     # Foreign key to incident
     incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=True)
     incident = relationship("Incident", back_populates="reports")
+    
+    # Foreign key to user (who submitted the report)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("User")
 
