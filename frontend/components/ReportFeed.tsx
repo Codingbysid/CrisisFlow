@@ -63,7 +63,8 @@ export default function ReportFeed({ reports, onRefresh }: ReportFeedProps) {
         imageBase64 = await convertImageToBase64(selectedImage)
       }
 
-      const response = await fetch('http://127.0.0.1:8000/api/v1/reports/', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/v1/reports/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,24 +108,32 @@ export default function ReportFeed({ reports, onRefresh }: ReportFeedProps) {
   return (
     <div className="p-4">
       {/* New Report Form */}
-      <form onSubmit={handleSubmit} className="mb-6">
+      <form onSubmit={handleSubmit} className="mb-6" aria-label="Report submission form">
+        <label htmlFor="report-text" className="sr-only">
+          Report text input
+        </label>
         <textarea
+          id="report-text"
           value={newReportText}
           onChange={(e) => setNewReportText(e.target.value)}
           placeholder="Report a disaster incident... (or upload an image)"
-          className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
           rows={3}
+          aria-label="Report text input"
+          aria-required="false"
         />
         
         {/* Image Upload */}
         <div className="mt-2">
-          <label className="block">
+          <label htmlFor="image-upload" className="block">
             <span className="sr-only">Choose image</span>
             <input
+              id="image-upload"
               type="file"
               accept="image/*"
               onChange={handleImageSelect}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Upload image"
             />
           </label>
           
@@ -149,7 +158,9 @@ export default function ReportFeed({ reports, onRefresh }: ReportFeedProps) {
         <button
           type="submit"
           disabled={!newReportText.trim() && !selectedImage}
-          className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          aria-label="Submit report"
+          aria-disabled={!newReportText.trim() && !selectedImage}
         >
           Submit Report
         </button>
